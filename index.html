@@ -2,19 +2,31 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Partículas Smooth Control - Yssabella</title>
+    <title>Yssabella-Yandeli-Victorio-Cenzano/title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
+        body { margin: 0; overflow: hidden; background: #000; cursor: pointer; }
         #video-container {
             position: absolute; bottom: 20px; left: 20px;
             width: 180px; border-radius: 12px; border: 2px solid #555;
             transform: scaleX(-1); z-index: 10; opacity: 0.3;
         }
+        /* Texto discreto arriba a la izquierda */
+        #music-hint {
+            position: absolute; top: 15px; left: 15px;
+            color: rgba(255, 255, 255, 0.5); font-family: sans-serif;
+            font-size: 12px; z-index: 100; pointer-events: none;
+            letter-spacing: 1px; text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
 
-    <video id="video-container" autoplay></video>
+    <div id="music-hint">Click para poner musica</div>
+    <video id="video-container" autoplay playsinline></video>
+    
+    <audio id="bg-music" loop>
+        <source src="musica.mp3" type="audio/mpeg">
+    </audio>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
@@ -23,10 +35,21 @@
 
     <script>
         let scene, camera, renderer, particleSystem, material, font;
-        let targetScale = 1; // Escala objetivo
-        let currentScale = 1; // Escala actual (para suavizado)
+        let targetScale = 1; 
+        let currentScale = 1; 
         const videoElement = document.getElementById('video-container');
-        
+        const music = document.getElementById('bg-music');
+        const hint = document.getElementById('music-hint');
+
+        // Función para activar audio y quitar el texto
+        function activarSonido() {
+            music.play().catch(e => console.log("Audio esperando interacción"));
+            hint.style.display = 'none';
+        }
+
+        window.addEventListener('click', activarSonido, { once: true });
+        window.addEventListener('touchstart', activarSonido, { once: true });
+
         const settings = {
             color: '#00fbff',
             template: 'Corazón Yssabella',
@@ -78,7 +101,7 @@
             const box = new THREE.Box3().setFromPoints(points);
             const center = new THREE.Vector3();
             box.getCenter(center);
-            points.forEach(p => p.x -= center.x); // Centrar solo horizontalmente
+            points.forEach(p => p.x -= center.x);
             return points;
         }
 
@@ -90,7 +113,7 @@
             else material.color.set(settings.color);
 
             if (name === 'Corazón Yssabella') {
-                for (let i = 0; i < 11000; i++) {
+                for (let i = 0; i < 12000; i++) {
                     const t = Math.random() * Math.PI * 2;
                     const x = 16 * Math.pow(Math.sin(t), 3);
                     const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
@@ -103,14 +126,14 @@
                 allPoints.push(...getPointsFromText('Prov. 3:15-18', 3.8, -4));
             }
             else if (name === 'Flor Amarilla') {
-                for (let i = 0; i < 20000; i++) {
+                for (let i = 0; i < 22000; i++) {
                     const t = Math.random() * Math.PI * 2;
                     const r = 16 * Math.sin(5 * t); 
                     allPoints.push(new THREE.Vector3(r * Math.cos(t), r * Math.sin(t), (Math.random()-0.5)*4));
                 }
             }
             else if (name === 'Cruz') {
-                for (let i = 0; i < 13000; i++) {
+                for (let i = 0; i < 14000; i++) {
                     let x, y;
                     if (Math.random() > 0.5) { x = (Math.random()-0.5)*3.5; y = (Math.random()-0.5)*35; }
                     else { x = (Math.random()-0.5)*22; y = (Math.random()-0.5)*3.5 + 8; }
@@ -130,8 +153,7 @@
                 if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
                     const lm = results.multiHandLandmarks[0];
                     const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-                    // Definimos la escala objetivo, pero no la aplicamos de golpe
-                    targetScale = THREE.MathUtils.mapLinear(dist, 0.05, 0.45, 0.4, 5.0);
+                    targetScale = THREE.MathUtils.mapLinear(dist, 0.05, 0.45, 0.5, 5.0);
                 }
             });
             const cam = new Camera(videoElement, {
@@ -144,12 +166,8 @@
         function animate() {
             requestAnimationFrame(animate);
             if(particleSystem) {
-                // 1. ROTACIÓN HACIA LA DERECHA LENTA
-                particleSystem.rotation.y -= 0.008; 
-
-                // 2. SUAVIZADO DE ESCALA (LERP)
-                // Esto hace que el zoom sea fluido y no tiemble
-                currentScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.05);
+                particleSystem.rotation.y += 0.008; 
+                currentScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.06);
                 particleSystem.scale.set(currentScale, currentScale, currentScale);
             }
             renderer.render(scene, camera);
