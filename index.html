@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Partículas Smooth Control - Yssabella</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #video-container {
+            position: absolute; bottom: 20px; left: 20px;
+            width: 180px; border-radius: 12px; border: 2px solid #555;
+            transform: scaleX(-1); z-index: 10; opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="video-container" autoplay></video>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+
+    <script>
+        let scene, camera, renderer, particleSystem, material, font;
+        let targetScale = 1; // Escala objetivo
+        let currentScale = 1; // Escala actual (para suavizado)
+        const videoElement = document.getElementById('video-container');
+        
+        const settings = {
+            color: '#00fbff',
+            template: 'Corazón Yssabella',
+            size: 0.08
+        };
+
+        const loader = new THREE.FontLoader();
+        loader.load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', (f) => { font = f; init(); });
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 45;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            material = new THREE.PointsMaterial({
+                size: settings.size,
+                color: settings.color,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            const gui = new dat.GUI();
+            gui.addColor(settings, 'color').name('Color').onChange(v => {
+                if (settings.template !== 'Flor Amarilla') material.color.set(v);
+            });
+            gui.add(settings, 'template', ['Corazón Yssabella', 'Tu eres mi Prov. 3:15-18', 'Flor Amarilla', 'Cruz']).onChange(updateShape);
+
+            updateShape(settings.template);
+            setupHands();
+            animate();
+        }
+
+        function getPointsFromText(text, size, yOffset = 0) {
+            const shapes = font.generateShapes(text, size);
+            const points = [];
+            shapes.forEach(shape => {
+                const shapePoints = shape.getSpacedPoints(200); 
+                shapePoints.forEach(p => {
+                    for(let i=0; i<3; i++) {
+                        points.push(new THREE.Vector3(p.x, p.y + yOffset, (Math.random()-0.5)*0.5));
+                    }
+                });
+            });
+            const box = new THREE.Box3().setFromPoints(points);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            points.forEach(p => p.x -= center.x); // Centrar solo horizontalmente
+            return points;
+        }
+
+        function updateShape(name) {
+            if (particleSystem) scene.remove(particleSystem);
+            let allPoints = [];
+
+            if (name === 'Flor Amarilla') material.color.set('#ffff00');
+            else material.color.set(settings.color);
+
+            if (name === 'Corazón Yssabella') {
+                for (let i = 0; i < 11000; i++) {
+                    const t = Math.random() * Math.PI * 2;
+                    const x = 16 * Math.pow(Math.sin(t), 3);
+                    const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                    allPoints.push(new THREE.Vector3(x, y, (Math.random()-0.5)*1.5));
+                }
+                allPoints.push(...getPointsFromText('Yssabella', 3.8, -1.5));
+            } 
+            else if (name === 'Tu eres mi Prov. 3:15-18') {
+                allPoints.push(...getPointsFromText('Tu eres mi', 5, 4));
+                allPoints.push(...getPointsFromText('Prov. 3:15-18', 3.8, -4));
+            }
+            else if (name === 'Flor Amarilla') {
+                for (let i = 0; i < 20000; i++) {
+                    const t = Math.random() * Math.PI * 2;
+                    const r = 16 * Math.sin(5 * t); 
+                    allPoints.push(new THREE.Vector3(r * Math.cos(t), r * Math.sin(t), (Math.random()-0.5)*4));
+                }
+            }
+            else if (name === 'Cruz') {
+                for (let i = 0; i < 13000; i++) {
+                    let x, y;
+                    if (Math.random() > 0.5) { x = (Math.random()-0.5)*3.5; y = (Math.random()-0.5)*35; }
+                    else { x = (Math.random()-0.5)*22; y = (Math.random()-0.5)*3.5 + 8; }
+                    allPoints.push(new THREE.Vector3(x, y, (Math.random()-0.5)*2.5));
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(allPoints);
+            particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
+        }
+
+        function setupHands() {
+            const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1 });
+            hands.onResults((results) => {
+                if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
+                    const lm = results.multiHandLandmarks[0];
+                    const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                    // Definimos la escala objetivo, pero no la aplicamos de golpe
+                    targetScale = THREE.MathUtils.mapLinear(dist, 0.05, 0.45, 0.4, 5.0);
+                }
+            });
+            const cam = new Camera(videoElement, {
+                onFrame: async () => { await hands.send({image: videoElement}); },
+                width: 640, height: 480
+            });
+            cam.start();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(particleSystem) {
+                // 1. ROTACIÓN HACIA LA DERECHA LENTA
+                particleSystem.rotation.y -= 0.008; 
+
+                // 2. SUAVIZADO DE ESCALA (LERP)
+                // Esto hace que el zoom sea fluido y no tiemble
+                currentScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.05);
+                particleSystem.scale.set(currentScale, currentScale, currentScale);
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
